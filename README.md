@@ -12,7 +12,7 @@ A podcast listening extension for FreshRSS that puts the audio player above the 
 
 ## Install
 
-1. Extract the plugin ZIP, or use the `xExtension-PodcastPlayer` folder included in this download.
+1. Extract the plugin ZIP, or use the `xExtension-PodcastPlayer` folder in this repository.
 2. Copy that folder into your FreshRSS `extensions` directory. `metadata.json` and `extension.php` must sit directly inside `xExtension-PodcastPlayer`, not inside another nested folder.
 3. In FreshRSS, open **Configuration → Extensions** and enable **Podcast Player** for your user.
 4. Reload FreshRSS and open a podcast article.
