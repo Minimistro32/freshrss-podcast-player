@@ -10,6 +10,12 @@ A podcast listening extension for FreshRSS that puts the audio player above the 
 
 *This extension streams podcasts.* It does not currently download or save episode audio for later or offline listening. Saved listening progress is a bookmark of your position, not a saved copy of the podcast.
 
+<p align="center">
+  <img src="podcast-player-desktop.png" height="400px">
+  &nbsp;&nbsp;
+  <img src="podcast-player.png" height="400px">
+</p>
+
 ## Install
 
 1. Extract the plugin ZIP, or use the `xExtension-PodcastPlayer` folder in this repository.
