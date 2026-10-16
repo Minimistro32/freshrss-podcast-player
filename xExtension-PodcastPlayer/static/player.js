@@ -4,12 +4,58 @@
     window.freshRSSPodcastPlayerLoaded = true;
 
     const speeds = [0.8, 1, 1.3, 1.5, 1.8, 2];
-    const initialized = new WeakMap();
+    // A DOM property survives repeated script execution without being copied by cloneNode.
+    const owner = Symbol.for('freshrss.podcastPlayer.state');
     const states = new Set();
     const memory = new Map();
     // Different FreshRSS installations can share a host, so include the path too.
     const prefix = `freshrss-podcast:v1:${location.pathname}:`;
     let storageAvailable = true;
+    let active = null;
+    const session = navigator.mediaSession;
+    const actions = ['play', 'pause', 'seekbackward', 'seekforward', 'seekto', 'previoustrack', 'nexttrack'];
+
+    function syncSession() {
+        if (!session || !active) return;
+        const audio = active.audio;
+        try {
+            session.playbackState = audio.ended ? 'none' : audio.paused ? 'paused' : 'playing';
+            if (session.setPositionState) {
+                if (Number.isFinite(audio.duration) && audio.duration > 0) {
+                    session.setPositionState({ duration: audio.duration, playbackRate: audio.playbackRate,
+                        position: Math.max(0, Math.min(audio.currentTime, audio.duration)) });
+                } else session.setPositionState();
+            }
+        } catch (_) { /* Partial Media Session support must not interrupt audio. */ }
+    }
+
+    function activate(state) {
+        active = state;
+        if (!session) return;
+        const handlers = {
+            play: () => { const promise = state.audio.play(); if (promise) promise.catch(() => {}); },
+            pause: () => state.audio.pause(),
+            seekbackward: (details = {}) => state.skip(-(Number.isFinite(details.seekOffset) && details.seekOffset > 0 ? details.seekOffset : 15)),
+            seekforward: (details = {}) => state.skip(Number.isFinite(details.seekOffset) && details.seekOffset > 0 ? details.seekOffset : 30),
+            previoustrack: () => state.skip(-15),
+            nexttrack: () => state.skip(30),
+            seekto: (details) => { if (Number.isFinite(details.seekTime)) state.jump(details.seekTime); },
+        };
+        for (const action of actions) {
+            try { session.setActionHandler(action, handlers[action]); } catch (_) { /* Unsupported action. */ }
+        }
+        syncSession();
+    }
+
+    function releaseSession(state) {
+        if (active !== state) return;
+        active = null;
+        if (!session) return;
+        for (const action of actions) {
+            try { session.setActionHandler(action, null); } catch (_) { /* Unsupported action. */ }
+        }
+        try { session.playbackState = 'none'; session.setPositionState?.(); } catch (_) { /* Unsupported state. */ }
+    }
 
     function read(key) {
         try {
@@ -39,8 +85,8 @@
     }
 
     function init(player) {
-        if (initialized.has(player)) {
-            states.add(initialized.get(player));
+        if (player[owner]) {
+            states.add(player[owner]);
             return;
         }
         const audio = player.querySelector('audio');
@@ -160,9 +206,17 @@
             } catch (_) { say('This player does not support that speed.'); }
         }
 
-        const state = { player, audio, save };
+        function jump(target) {
+            restorePending = false;
+            touched = true;
+            completed = false;
+            if (seek(target)) save(true);
+            if (active === state) syncSession();
+        }
+        const skip = (offset) => jump(audio.currentTime + offset);
+        const state = { player, audio, save, jump, skip };
         states.add(state);
-        initialized.set(player, state);
+        player[owner] = state;
         applyRate(rate);
         select.disabled = false;
         select.addEventListener('change', () => {
@@ -176,12 +230,23 @@
         back.setAttribute('aria-label', 'Rewind 15 seconds');
         forward.setAttribute('aria-label', 'Forward 30 seconds');
         for (const [control, offset] of [[back, -15], [forward, 30]]) {
-            control.addEventListener('click', () => {
-                restorePending = false;
-                touched = true;
-                completed = false;
-                if (seek(audio.currentTime + offset)) save(true);
-            });
+            // Some embedded clients synthesize a click in addition to WebKit's
+            // compatibility click. Consume at most one click per pointer gesture.
+            // A new pointerdown resets immediately, so rapid intentional taps work.
+            let gesture = null;
+            const beginGesture = () => { gesture = { handled: false, at: performance.now() }; };
+            control.addEventListener('pointerdown', beginGesture, { passive: true });
+            if (!window.PointerEvent) control.addEventListener('touchstart', beginGesture, { passive: true });
+            control.addEventListener('keydown', () => { gesture = null; });
+            control.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                if (gesture && performance.now() - gesture.at < 800) {
+                    if (gesture.handled) return;
+                    gesture.handled = true;
+                }
+                skip(offset);
+            }, { capture: true });
         }
         resume.addEventListener('click', () => {
             restorePending = true;
@@ -210,6 +275,7 @@
             touched = true;
             completed = false;
             restore();
+            activate(state);
         });
         audio.addEventListener('timeupdate', () => save());
         audio.addEventListener('pause', () => save(true));
@@ -221,6 +287,9 @@
         });
         audio.addEventListener('ended', () => { touched = true; completed = true; restorePending = false; save(true); });
         audio.addEventListener('error', () => say('Unable to load audio. Try its original download link below.'));
+        for (const event of ['playing', 'loadedmetadata', 'durationchange', 'timeupdate', 'pause', 'seeked', 'ended', 'ratechange']) {
+            audio.addEventListener(event, () => { if (active === state) syncSession(); });
+        }
         controls.hidden = false;
         update();
         if (completed) say('Episode finished. Start over to listen again.');
@@ -246,6 +315,7 @@
                     state.audio.pause();
                     state.save(true);
                     states.delete(state);
+                    releaseSession(state);
                 }
             }
         }).observe(document.body, { childList: true, subtree: true });

@@ -2,7 +2,7 @@
   "name": "Podcast Player",
   "author": "Tyson Freeze",
   "description": "Audio at the top of articles, 15-second rewind, 30-second forward, playback speeds, and remembered listening positions.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "entrypoint": "PodcastPlayer",
   "type": "user"
 }

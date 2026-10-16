@@ -10,12 +10,6 @@ A podcast listening extension for FreshRSS that puts the audio player above the 
 
 *This extension streams podcasts.* It does not currently download or save episode audio for later or offline listening. Saved listening progress is a bookmark of your position, not a saved copy of the podcast.
 
-<p align="center">
-  <img src="podcast-player-desktop.png" height="400px">
-  &nbsp;&nbsp;
-  <img src="podcast-player.png" height="400px">
-</p>
-
 ## Install
 
 1. Extract the plugin ZIP, or use the `xExtension-PodcastPlayer` folder in this repository.
@@ -41,6 +35,13 @@ With experimental mode enabled, the mobile UI, skip buttons, speed control, **Re
 It remains experimental because other clients or app versions may handle article scripts differently. If a client blocks those scripts, the extra controls will not appear, though a standard audio player may still be available.
 
 Listening progress stays in the browser or client where you listened. Your position in ReadKit does not sync with the FreshRSS web player or other devices.
+
+## System media controls
+
+On browsers and clients that expose the [Media Session API](https://www.w3.org/TR/mediasession/), system controls target the most recently played episode. Play/pause, rewind, forward, and seeking to a position are supported. Rewind defaults to 15 seconds and forward to 30 seconds; a seek interval supplied by the OS takes precedence. Next/previous track buttons also skip +30/−15 seconds within the episode, since the player does not have a playlist.
+
+The player reports its position and playback speed to the system. Available buttons depend on the browser, OS, and embedded client. Re-fetch cached articles after upgrading experimental mode so they receive the updated embedded script.
+
 
 ## Progress and playback
 
